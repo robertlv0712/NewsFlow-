@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NewsFlow | 即時新聞與財經看板</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        /* 自定義動畫 */
+        @keyframes fade-in-up {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+            animation: fade-in-up 0.5s ease-out forwards;
+        }
+        @keyframes fade-in {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .animate-fade-in {
+            animation: fade-in 0.3s ease-out forwards;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+        }
+        /* 隱藏捲軸但保持功能 (選用) */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 selection:bg-emerald-100">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // === Icon Component (替代 Lucide-React 以便在單一 HTML 中運行) ===
+        const Icon = ({ name, className }) => {
+            const icons = {
+                search: <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />,
+                newspaper: <path strokeLinecap="round" strokeLinejoin="round" d="M12 7.5h1.5m-1.5 3h1.5m-7.5 3h7.5m-7.5 3h7.5m3-9h3.375c.621 0 1.125.504 1.125 1.125V18a2.25 2.25 0 01-2.25 2.25M16.5 7.5V18a2.25 2.25 0 002.25 2.25M16.5 7.5V4.875c0-.621-.504-1.125-1.125-1.125H4.125C3.504 3.75 3 4.254 3 4.875V18a2.25 2.25 0 002.25 2.25h13.5M6 7.5h3v3H6v-3z" />,
+                externalLink: <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />,
+                clock: <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />,
+                refresh: <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />,
+                info: <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />,
+                globe: <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />,
+                filter: <path strokeLinecap="round" strokeLinejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.568a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" />,
+                languages: <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 21l5.25-11.25L21 21m-9-3h7.5M3 5.621a48.474 48.474 0 016-.371m0 0c1.12 0 2.233.038 3.334.114M9 5.25V3m3.334 2.364C11.176 10.658 7.69 15.08 3 17.502m9.334-12.138c.896.061 1.785.147 2.666.257m-4.589 8.495a18.023 18.023 0 01-3.827-5.802" />,
+                trendingUp: <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />,
+                barChart: <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />,
+                flame: <path strokeLinecap="round" strokeLinejoin="round" d="M15.362 5.214A8.252 8.252 0 0112 21 8.25 8.25 0 016.038 7.048 8.287 8.287 0 009 9.6a8.983 8.983 0 013.361-6.867 8.21 8.21 0 003 2.48z" />,
+                activity: <path strokeLinecap="round" strokeLinejoin="round" d="M22 12h-4l-3 9L9 3l-3 9H2" />
+            };
+            
+            return (
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
+                    {icons[name] || null}
+                </svg>
+            );
+        };
+
+        // === TradingView Widget Component ===
+        const TradingViewWidget = ({ symbol, theme = 'light' }) => {
+            const container = useRef();
+
+            useEffect(() => {
+                if (!symbol) return;
+                container.current.innerHTML = '';
+                const script = document.createElement("script");
+                script.src = "https://s3.tradingview.com/external-embedding/embed-widget-single-quote.js";
+                script.type = "text/javascript";
+                script.async = true;
+                script.innerHTML = JSON.stringify({
+                    "symbol": symbol,
+                    "width": "100%",
+                    "isTransparent": false,
+                    "colorTheme": theme,
+                    "locale": "zh_TW",
+                    "largeChartUrl": "",
+                    "style": "1",
+                    "hide_volume": false
+                });
+                container.current.appendChild(script);
+            }, [symbol, theme]);
+
+            return (
+                <div className="tradingview-widget-container mb-6 animate-fade-in-up shadow-lg rounded-xl overflow-hidden border border-slate-200">
+                    <div ref={container} className="tradingview-widget-container__widget"></div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [query, setQuery] = useState('');
+            const [articles, setArticles] = useState([]);
+            const [currentSymbol, setCurrentSymbol] = useState(null);
+            const [loading, setLoading] = useState(false);
+            const [searched, setSearched] = useState(false);
+            const [error, setError] = useState(null);
+            const [usingMockData, setUsingMockData] = useState(false);
+            const [isAutoLoaded, setIsAutoLoaded] = useState(false);
+            const [searchMode, setSearchMode] = useState('stock');
+
+            const TWO_DAYS_MS = 48 * 60 * 60 * 1000;
+
+            const trendingTopicsMap = {
+                tw: ['台積電', '房市', 'AI 人工智慧', '颱風', 'ETF', '大谷翔平'],
+                global: ['Fed', 'US Stock', 'Bitcoin', 'SpaceX', 'OpenAI', 'Ukraine'],
+                stock: ['2330 台積電', '2317 鴻海', 'NVDA', 'AAPL', '2603 長榮', '3008 大立光']
+            };
+
+            const currentTrendingTopics = trendingTopicsMap[searchMode] || trendingTopicsMap.tw;
+
+            const mockNewsData = {
+                tw: [
+                    { title: "台積電先進製程傳捷報，2奈米需求超預期", link: "#", pubDate: new Date().toISOString(), source: "經濟日報", cleanDesc: "業界傳出台積電 2 奈米製程試產良率優於預期..." },
+                    { title: "台股收盤大漲 300 點，站上 2 萬大關", link: "#", pubDate: new Date().toISOString(), source: "鉅亨網", cleanDesc: "受美股激勵，台股今日開高走高，電子權值股領軍..." },
+                    { title: "氣象署發布豪雨特報，北北基宜防大雨", link: "#", pubDate: new Date(Date.now() - 7200000).toISOString(), source: "氣象局", cleanDesc: "受東北季風影響，北部地區今晚至明日有局部大雨發生機率..." },
+                    { title: "央行打房新政策上路，房市交易量縮", link: "#", pubDate: new Date(Date.now() - 10800000).toISOString(), source: "房產網", cleanDesc: "央行祭出第七波信用管制，本週房市看屋人潮明顯減少..." },
+                    { title: "大巨蛋演唱會經濟效益驚人，周邊商圈受惠", link: "#", pubDate: new Date(Date.now() - 14400000).toISOString(), source: "生活報", cleanDesc: "知名歌手大巨蛋開唱，吸引數萬歌迷朝聖，帶動東區商圈業績..." },
+                    { title: "台灣出口連紅，AI 伺服器扮功臣", link: "#", pubDate: new Date(Date.now() - 18000000).toISOString(), source: "財經新報", cleanDesc: "財政部公布最新出口數據，受惠 AI 需求強勁，電子零組件出口暢旺..." }
+                ],
+                global: [
+                    { title: "Fed Signals Potential Rate Cuts as Inflation Cools", link: "#", pubDate: new Date().toISOString(), source: "Bloomberg", cleanDesc: "Federal Reserve officials indicated that interest rate cuts could be on the table..." },
+                    { title: "Tech Giants Rally on AI Optimism", link: "#", pubDate: new Date().toISOString(), source: "Reuters", cleanDesc: "Major technology stocks surged today as new AI developments were announced..." },
+                    { title: "Global Markets React to New Economic Data", link: "#", pubDate: new Date(Date.now() - 3600000).toISOString(), source: "CNBC", cleanDesc: "Asian and European markets showed mixed results following the release of US jobs data..." },
+                    { title: "SpaceX Starship Successful Launch", link: "#", pubDate: new Date(Date.now() - 7200000).toISOString(), source: "BBC", cleanDesc: "SpaceX has successfully launched its latest Starship prototype..." },
+                    { title: "Oil Prices Stabilize Amid Middle East Tensions", link: "#", pubDate: new Date(Date.now() - 10800000).toISOString(), source: "Al Jazeera", cleanDesc: "Crude oil prices held steady as traders monitored the geopolitical situation..." },
+                    { title: "New EV Battery Tech Promises Longer Range", link: "#", pubDate: new Date(Date.now() - 14400000).toISOString(), source: "TechCrunch", cleanDesc: "Researchers have unveiled a new battery technology that could double EV range..." }
+                ],
+                stock: [
+                    { title: "外資調高目標價，看好下季營收爆發", link: "#", pubDate: new Date().toISOString(), source: "財經新報", cleanDesc: "多家外資券商發布最新報告，認為該公司在 AI 伺服器領域的市占率將持續擴大..." },
+                    { title: "法說會重點摘要：毛利率優於預期", link: "#", pubDate: new Date(Date.now() - 3600000).toISOString(), source: "MoneyDJ", cleanDesc: "公司今日召開法說會，公布上季財報，受惠於產品組合優化，毛利率創下近年新高..." },
+                    { title: "美股四大指數收黑，科技股賣壓沈重", link: "#", pubDate: new Date(Date.now() - 7200000).toISOString(), source: "華爾街日報", cleanDesc: "受到通膨數據高於預期影響，美股週二開低走低，那斯達克指數跌幅最重..." },
+                    { title: "航運股揚帆！運價指數連三漲", link: "#", pubDate: new Date(Date.now() - 10800000).toISOString(), source: "工商時報", cleanDesc: "紅海危機持續發酵，貨櫃運價指數 SCFI 連續三週上漲，航運三雄股價齊揚..." },
+                    { title: "存股族注意！高股息 ETF 換股名單出爐", link: "#", pubDate: new Date(Date.now() - 14400000).toISOString(), source: "理財網", cleanDesc: "人氣高股息 ETF 今日公布成分股調整，新增 5 檔、刪除 5 檔..." },
+                    { title: "比特幣突破 7 萬美元，加密貨幣概念股歡騰", link: "#", pubDate: new Date(Date.now() - 18000000).toISOString(), source: "區塊鏈新聞", cleanDesc: "比特幣價格再創新高，帶動顯示卡與挖礦概念股盤中急拉..." }
+                ]
+            };
+
+            useEffect(() => {
+                fetchNews('', searchMode, true);
+            }, [searchMode]);
+
+            const getTradingViewSymbol = (input) => {
+                const cleanInput = input.trim().toUpperCase();
+                if (/^\d+$/.test(cleanInput)) return `TWSE:${cleanInput}`;
+                if (['BTC', 'ETH', 'BITCOIN'].includes(cleanInput)) return `BINANCE:${cleanInput}USDT`;
+                if (cleanInput === 'TSMC') return 'NYSE:TSM';
+                return `NASDAQ:${cleanInput}`;
+            };
+
+            const processItems = (items) => {
+                const now = new Date();
+                const filtered = items.filter(item => (now - new Date(item.pubDate)) < TWO_DAYS_MS);
+                return filtered.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+            };
+
+            const loadMockNews = (mode, errorMsg, limit = null) => {
+                const data = mockNewsData[mode] || mockNewsData.tw;
+                let processed = processItems(data);
+                if (limit) processed = processed.slice(0, limit);
+                setArticles(processed);
+                setError(errorMsg);
+                setUsingMockData(true);
+            };
+
+            const fetchNews = async (searchTerm, mode, isAutoLoad = false) => {
+                if (!isAutoLoad && !searchTerm.trim()) return;
+
+                setLoading(true);
+                setError(null);
+                setSearched(true);
+                setIsAutoLoaded(isAutoLoad);
+                setArticles([]);
+                setUsingMockData(false);
+
+                if (mode === 'stock') {
+                    if (!isAutoLoad) {
+                        const symbolPart = searchTerm.split(' ')[0];
+                        const tvSymbol = getTradingViewSymbol(symbolPart);
+                        setCurrentSymbol(tvSymbol);
+                    } else {
+                        setCurrentSymbol(null);
+                    }
+                }
+
+                try {
+                    let rssUrl = '';
+                    // === URL 建構邏輯 (自動載入：國際/台灣/財經熱點) ===
+                    if (isAutoLoad) {
+                        if (mode === 'global') {
+                            rssUrl = `https://news.google.com/rss?hl=en-US&gl=US&ceid=US:en`;
+                        } else if (mode === 'stock') {
+                            rssUrl = `https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
+                        } else {
+                            rssUrl = `https://news.google.com/rss?hl=zh-TW&gl=TW&ceid=TW:zh-Hant`;
+                        }
+                    } else {
+                        // === 手動搜尋 ===
+                        let searchQuery = searchTerm;
+                        if (mode === 'stock') {
+                            if (/^\d+$/.test(searchTerm)) {
+                                searchQuery = `${searchTerm} 個股新聞`;
+                            } else {
+                                searchQuery = `${searchTerm} stock news`;
+                            }
+                        }
+                        const langParams = (mode === 'global' || (mode === 'stock' && /^[a-zA-Z]+$/.test(searchTerm)))
+                            ? '&hl=en-US&gl=US&ceid=US:en'
+                            : '&hl=zh-TW&gl=TW&ceid=TW:zh-Hant';
+                        
+                        rssUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(searchQuery)}+when:2d${langParams}`;
+                    }
+
+                    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(rssUrl)}`;
+                    const response = await fetch(apiUrl);
+                    const data = await response.json();
+
+                    if (data.status === 'ok') {
+                        const processedItems = data.items.map(item => {
+                            const tempDiv = document.createElement('div');
+                            tempDiv.innerHTML = item.description;
+                            const textOnly = tempDiv.textContent || tempDiv.innerText || "";
+                            return {
+                                title: item.title,
+                                link: item.link,
+                                pubDate: item.pubDate,
+                                source: item.author || '新聞快訊',
+                                cleanDesc: textOnly.substring(0, 100) + '...',
+                            };
+                        });
+
+                        const finalItems = processItems(processedItems);
+                        const displayedItems = isAutoLoad ? finalItems.slice(0, 6) : finalItems;
+
+                        if (displayedItems.length === 0) {
+                            loadMockNews(mode, '目前無即時焦點，以下顯示熱門範例供參考。', isAutoLoad ? 6 : null);
+                        } else {
+                            setArticles(displayedItems);
+                        }
+                    } else {
+                        throw new Error("RSS Service Busy");
+                    }
+                } catch (err) {
+                    loadMockNews(mode, '新聞連線忙碌中，目前顯示備用資料。', isAutoLoad ? 6 : null);
+                } finally {
+                    setLoading(false);
+                }
+            };
+
+            const handleSearch = (e) => {
+                e.preventDefault();
+                fetchNews(query, searchMode, false);
+            };
+
+            const handleTagClick = (tag) => {
+                const cleanTag = tag.split(' ')[0];
+                setQuery(cleanTag);
+                fetchNews(cleanTag, searchMode, false);
+            };
+
+            const handleModeChange = (mode) => {
+                setSearchMode(mode);
+                setSearched(false);
+                setArticles([]);
+                setCurrentSymbol(null);
+                setError(null);
+                setUsingMockData(false);
+                setQuery('');
+                setIsAutoLoaded(true);
+            };
+
+            const getRelativeTime = (dateString) => {
+                try {
+                    const now = new Date();
+                    const published = new Date(dateString);
+                    const diffInSeconds = Math.floor((now - published) / 1000);
+                    if (isNaN(diffInSeconds)) return '近期';
+                    if (diffInSeconds < 60) return '剛剛';
+                    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} 分鐘前`;
+                    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} 小時前`;
+                    return `${Math.floor(diffInSeconds / 86400)} 天前`;
+                } catch (e) { return '近期'; }
+            };
+
+            return (
+                <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-emerald-100 pb-20">
+                    
+                    {/* Header */}
+                    <header className="pt-10 pb-6 px-4 text-center bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm bg-opacity-90 backdrop-blur-md">
+                        <div className="flex items-center justify-center gap-3 mb-2">
+                            <div className={`p-2 rounded-lg shadow-md transition-colors duration-500 ${
+                                searchMode === 'stock' ? 'bg-emerald-600 shadow-emerald-200' :
+                                searchMode === 'global' ? 'bg-indigo-600 shadow-indigo-200' : 'bg-blue-600 shadow-blue-200'
+                            }`}>
+                                {searchMode === 'stock' ? <Icon name="barChart" className="w-6 h-6 text-white" /> :
+                                 searchMode === 'global' ? <Icon name="globe" className="w-6 h-6 text-white" /> : <Icon name="newspaper" className="w-6 h-6 text-white" />}
+                            </div>
+                            <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">
+                                News<span className={`transition-colors duration-500 ${
+                                    searchMode === 'stock' ? 'text-emerald-600' :
+                                    searchMode === 'global' ? 'text-indigo-600' : 'text-blue-600'
+                                }`}>Flow</span>
+                            </h1>
+                        </div>
+                        
+                        {/* Toggles */}
+                        <div className="flex justify-center mt-4 gap-2 flex-wrap">
+                            <button onClick={() => handleModeChange('tw')} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${searchMode === 'tw' ? 'bg-blue-100 text-blue-700 ring-2 ring-blue-500 ring-offset-1' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                <Icon name="newspaper" className="w-3 h-3" /> 台灣新聞
+                            </button>
+                            <button onClick={() => handleModeChange('global')} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${searchMode === 'global' ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-500 ring-offset-1' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                <Icon name="globe" className="w-3 h-3" /> 國際觀點
+                            </button>
+                            <button onClick={() => handleModeChange('stock')} className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all flex items-center gap-1 ${searchMode === 'stock' ? 'bg-emerald-100 text-emerald-700 ring-2 ring-emerald-500 ring-offset-1' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'}`}>
+                                <Icon name="trendingUp" className="w-3 h-3" /> 個股行情
+                            </button>
+                        </div>
+                    </header>
+
+                    {/* Search Area */}
+                    <div className="max-w-3xl mx-auto px-4 my-8">
+                        <form onSubmit={handleSearch} className="relative group z-10">
+                            <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                                <Icon name="search" className={`w-5 h-5 transition-colors ${loading ? 'text-emerald-500' : 'text-slate-400'}`} />
+                            </div>
+                            <input
+                                type="text"
+                                className="block w-full pl-14 pr-24 py-4 bg-white border border-slate-200 rounded-full text-lg shadow-sm placeholder-slate-400 focus:outline-none focus:ring-4 transition-all duration-300 focus:border-transparent"
+                                style={{
+                                    '--tw-ring-color': searchMode === 'stock' ? 'rgba(16, 185, 129, 0.1)' :
+                                                    searchMode === 'global' ? 'rgba(79, 70, 229, 0.1)' : 'rgba(37, 99, 235, 0.1)'
+                                }}
+                                placeholder={searchMode === 'stock' ? "輸入代號 (如: 2330, NVDA)..." : 
+                                            searchMode === 'global' ? "搜尋全球新聞 (如: AI, TSMC)..." : "搜尋新聞..."}
+                                value={query}
+                                onChange={(e) => setQuery(e.target.value)}
+                            />
+                            <div className="absolute right-2 top-2 bottom-2 flex items-center">
+                                <button 
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`px-6 h-full rounded-full font-medium text-white transition-all shadow-md flex items-center gap-2 ${
+                                        loading ? 'bg-slate-400 cursor-not-allowed' : 
+                                        searchMode === 'stock' ? 'bg-emerald-600 hover:bg-emerald-700' :
+                                        searchMode === 'global' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-blue-600 hover:bg-blue-700'
+                                    }`}
+                                >
+                                    {loading ? <Icon name="refresh" className="w-4 h-4 animate-spin" /> : '搜尋'}
+                                </button>
+                            </div>
+                        </form>
+
+                        {/* Tags */}
+                        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                                {searchMode === 'stock' ? '熱門個股' : searchMode === 'global' ? '全球熱搜' : '台灣熱門'}:
+                            </span>
+                            {currentTrendingTopics.map((tag) => (
+                                <button
+                                    key={tag}
+                                    onClick={() => handleTagClick(tag)}
+                                    className={`px-3 py-1 text-xs bg-white border border-slate-200 rounded-md transition-all duration-200 ${
+                                        searchMode === 'stock' ? 'hover:border-emerald-300 hover:text-emerald-600' :
+                                        searchMode === 'global' ? 'hover:border-indigo-300 hover:text-indigo-600' :
+                                        'hover:border-blue-300 hover:text-blue-600'
+                                    }`}
+                                >
+                                    {tag}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* TradingView Widget */}
+                    {searchMode === 'stock' && currentSymbol && !loading && (
+                        <div className="max-w-5xl mx-auto px-4">
+                            <TradingViewWidget symbol={currentSymbol} />
+                        </div>
+                    )}
+
+                    {/* Messages */}
+                    {error && (
+                        <div className="max-w-3xl mx-auto px-4 mb-6 animate-fade-in">
+                            <div className={`px-4 py-3 rounded-lg text-sm flex items-center gap-2 shadow-sm ${
+                                usingMockData ? 'bg-amber-50 border border-amber-200 text-amber-800' : 'bg-blue-50 border border-blue-200 text-blue-800'
+                            }`}>
+                                <Icon name="info" className="w-4 h-4 flex-shrink-0" />
+                                {error}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* News List */}
+                    <div className="max-w-5xl mx-auto px-4">
+                        {searched && !loading && articles.length > 0 && (
+                            <div className="flex items-center gap-2 mb-4 text-slate-700 font-bold animate-fade-in">
+                                {isAutoLoaded ? <Icon name="flame" className="w-5 h-5 text-rose-500" /> : <Icon name="newspaper" className="w-5 h-5" />}
+                                <span>
+                                {isAutoLoaded 
+                                    ? (searchMode === 'stock' ? '即時財經焦點' : '今日熱門頭條') 
+                                    : (searchMode === 'stock' ? '個股相關新聞' : '搜尋結果')}
+                                </span>
+                            </div>
+                        )}
+
+                        {loading ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                                {[1, 2, 3, 4, 5, 6].map((i) => (
+                                <div key={i} className="bg-white p-5 rounded-xl border border-slate-100 h-48 animate-pulse flex flex-col">
+                                    <div className="h-4 bg-slate-100 rounded w-24 mb-4"></div>
+                                    <div className="h-4 bg-slate-100 rounded w-full mb-2"></div>
+                                    <div className="h-4 bg-slate-100 rounded w-3/4 mb-2"></div>
+                                    <div className="h-8 bg-slate-50 rounded w-full mt-auto"></div>
+                                </div>
+                                ))}
+                            </div>
+                        ) : searched && articles.length > 0 ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 animate-fade-in-up">
+                                {articles.map((article, index) => (
+                                <div 
+                                    key={index} 
+                                    className={`group relative bg-white rounded-xl border overflow-hidden transition-all duration-300 hover:-translate-y-1 flex flex-col h-full hover:shadow-xl ${
+                                        searchMode === 'stock' ? 'border-emerald-100 hover:border-emerald-200' : 'border-slate-100 hover:border-indigo-200'
+                                    }`}
+                                >
+                                    <div className="p-5 flex-1 flex flex-col">
+                                    <div className="flex items-center justify-between mb-3 text-xs">
+                                        <span className={`font-bold px-2 py-0.5 rounded-md flex items-center gap-1 ${
+                                            searchMode === 'stock' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                                        }`}>
+                                        {searchMode === 'stock' ? <Icon name="trendingUp" className="w-3 h-3" /> : <Icon name="globe" className="w-3 h-3" />}
+                                        {article.source}
+                                        </span>
+                                        <div className="flex items-center text-slate-400">
+                                            <Icon name="clock" className="w-3 h-3 mr-1" />
+                                            {getRelativeTime(article.pubDate)}
+                                        </div>
+                                    </div>
+                                    
+                                    <a href={article.link} target="_blank" rel="noopener noreferrer">
+                                        <h3 className={`text-lg font-bold mb-3 leading-snug group-hover:underline decoration-2 underline-offset-2 ${
+                                            searchMode === 'stock' ? 'text-slate-800 group-hover:text-emerald-600' : 'text-slate-800 group-hover:text-indigo-600'
+                                        }`}>
+                                            {article.title}
+                                        </h3>
+                                    </a>
+                                    
+                                    <p className="text-slate-500 text-sm leading-relaxed mb-4 line-clamp-3 flex-1 break-words">
+                                        {article.cleanDesc}
+                                    </p>
+                                    
+                                    <div className="mt-auto pt-3 border-t border-slate-50 flex justify-between items-center">
+                                        {(searchMode === 'global' || (searchMode === 'stock' && /^[a-zA-Z]+$/.test(query) && !isAutoLoaded)) ? (
+                                            <a 
+                                            href={`https://translate.google.com/translate?sl=auto&tl=zh-TW&u=${encodeURIComponent(article.link)}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs font-medium text-slate-400 hover:text-indigo-600 flex items-center gap-1 transition-colors"
+                                            >
+                                                <Icon name="languages" className="w-3 h-3" /> 翻譯
+                                            </a>
+                                        ) : <span></span>}
+
+                                        <a 
+                                            href={article.link} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer"
+                                            className={`inline-flex items-center gap-1 text-xs font-medium transition-colors ${
+                                                searchMode === 'stock' ? 'text-emerald-600 hover:text-emerald-700' : 'text-indigo-600 hover:text-indigo-700'
+                                            }`}
+                                        >
+                                            閱讀全文 <Icon name="externalLink" className="w-3 h-3" />
+                                        </a>
+                                    </div>
+                                    </div>
+                                </div>
+                                ))}
+                            </div>
+                        ) : searched && !loading ? (
+                            <div className="text-center py-16 bg-white rounded-2xl border border-dashed border-slate-200">
+                                <div className="mx-auto w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4 text-slate-300">
+                                    <Icon name="filter" className="w-8 h-8" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-slate-600">找不到相關資訊</h3>
+                                <p className="text-slate-400 mt-2 text-sm max-w-md mx-auto">
+                                    請確認股票代號或關鍵字是否正確。
+                                </p>
+                            </div>
+                        ) : null}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
